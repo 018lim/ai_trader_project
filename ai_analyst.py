@@ -20,7 +20,7 @@ def ask_ai(ticker, name, fwd, growth, accel_str, bond_msg, cli_msg, signal_msg):
 
         [2. 종목 펀더멘털 (AI 자체 지식 활용)]
         - **섹터 판단**: 이 종목이 경기민감주(Cyclical)인지 방어주(Defensive)인지 판단하세요.
-        - {ticker}의 PER을 검색해서 평가해.
+        - {ticker}의 선행 PER을 검색해서 평가해. 50이 넘으면 매우 위험한 걸로 판단해.
         
 
         [3. 이익 모멘텀 데이터]
