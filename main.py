@@ -125,7 +125,7 @@ if run:
         c3.metric("성장률 (Speed)", f"{growth_val:+.2f}%", delta="증가" if growth_val>0 else "감소")
         c4.metric("가속도 (Accel)", f"{accel_val:+.2f}%p", delta="가속" if accel_val>0 else "감속")
         
-        st.success(f"🚦 시스템 신호: **{trade_signal}**")
+        
         with st.chat_message("assistant"): st.write(ai_res)
         
         st.subheader("📊 12개월 선행 EPS 추세선")
