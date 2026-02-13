@@ -78,30 +78,38 @@ st.caption(f"📊 매크로 진단: **미국 :{u_col}[{u_msg}]** / **한국 :{k_
 if run:
     st.divider()
     with st.spinner(f"🔍 '{user_input}' 분석 중..."):
+        # 1. 데이터 가져오기 (valuation 추가된 버전)
         ticker, name, country = find_ticker(user_input)
-        
-        # 수정한 get_unified_data 호출 (valuation 추가)
         df_ui, trend_df, valuation = get_unified_data(ticker, country)
         
-        # ... (이전 코드 동일) ...
-
-        # AI 분석 호출 시 PER, PBR 정보 추가 전달
-        ai_res = ask_ai(
-            ticker, name, fwd_val, growth_val, f"{accel_val:+.2f}%p", 
-            bond_risk_msg, u_msg, trade_signal, 
-            valuation['per'], valuation['pbr'] # 추가된 인자
-        )
-        
-        # 결과 표시 UI 수정
-        st.subheader(f"{name} ({ticker}) 분석 결과")
-        c1, c2, c3, c4, c5, c6 = st.columns(6) # 컬럼 확장
-        c1.metric("현재 주가", p_fmt)
-        c2.metric("12M Fwd EPS", f"{fwd_val:,.2f}")
-        c3.metric("성장률(Speed)", f"{growth_val:+.2f}%")
-        c4.metric("가속도(Accel)", f"{accel_val:+.2f}%p")
-        
-        # [추가] PER, PBR 표시
-        per_val = f"{valuation['per']:.2f}" if isinstance(valuation['per'], (int, float)) else valuation['per']
-        pbr_val = f"{valuation['pbr']:.2f}" if isinstance(valuation['pbr'], (int, float)) else valuation['pbr']
-        c5.metric("PER", per_val)
-        c6.metric("PBR", pbr_val)
+        if not trend_df.empty:
+            # 2. 성장률 및 가속도 계산 (변수 정의)
+            fwd_val = trend_df['12M_Fwd_EPS'].iloc[-1]
+            prev_fwd = trend_df['12M_Fwd_EPS'].iloc[-2]
+            old_fwd = trend_df['12M_Fwd_EPS'].iloc[-3]
+            
+            growth_val = ((fwd_val / prev_fwd) - 1) * 100
+            prev_growth = ((prev_fwd / old_fwd) - 1) * 100
+            accel_val = growth_val - prev_growth  # 여기서 accel_val이 정의됨!
+            
+            # 3. AI 분석 호출 (모든 변수가 준비된 후 호출)
+            ai_res = ask_ai(
+                ticker, name, fwd_val, growth_val, f"{accel_val:+.2f}%p", 
+                bond_risk_msg, u_msg, trade_signal, 
+                valuation['per'], valuation['pbr']
+            )
+            
+            # 4. 결과 UI 표시
+            st.subheader(f"{name} ({ticker}) 분석 결과")
+            # ... (이하 메트릭 표시 코드) ...
+            c1, c2, c3, c4, c5, c6 = st.columns(6)
+            c1.metric("현재 주가", f"{trend_df['Close'].iloc[-1]:,.0f}")
+            c2.metric("12M Fwd EPS", f"{fwd_val:,.2f}")
+            c3.metric("성장률(Speed)", f"{growth_val:+.2f}%")
+            c4.metric("가속도(Accel)", f"{accel_val:+.2f}%p")
+            c5.metric("PER", f"{valuation['per']}")
+            c6.metric("PBR", f"{valuation['pbr']}")
+            
+            st.info(ai_res)
+        else:
+            st.error("데이터를 불러오지 못했습니다. 티커를 확인해주세요.")
