@@ -77,63 +77,31 @@ st.caption(f"📊 매크로 진단: **미국 :{u_col}[{u_msg}]** / **한국 :{k_
 # 2. Analysis Execution
 if run:
     st.divider()
-    with st.spinner(f"🔍 '{user_input}' 정밀 분석 중..."):
+    with st.spinner(f"🔍 '{user_input}' 분석 중..."):
         ticker, name, country = find_ticker(user_input)
-        df_ui, trend_df = get_unified_data(ticker, country)
         
-        curr_p = 0
-        try: curr_p = yf.Ticker(ticker).history(period='1d')['Close'].iloc[-1]
-        except: pass
-        p_fmt = f"${curr_p:,.2f}" if country=="US" else f"{curr_p:,.0f}원"
+        # 수정한 get_unified_data 호출 (valuation 추가)
+        df_ui, trend_df, valuation = get_unified_data(ticker, country)
         
-        fwd_val, growth_val, accel_val = 0, 0, 0
-        trade_signal = "데이터 부족"
-        signal_color = "gray"
+        # ... (이전 코드 동일) ...
+
+        # AI 분석 호출 시 PER, PBR 정보 추가 전달
+        ai_res = ask_ai(
+            ticker, name, fwd_val, growth_val, f"{accel_val:+.2f}%p", 
+            bond_risk_msg, u_msg, trade_signal, 
+            valuation['per'], valuation['pbr'] # 추가된 인자
+        )
         
-        if not trend_df.empty and len(trend_df) >= 3:
-            fwd_val = trend_df.iloc[-1, 0]
-            eps_prev = trend_df.iloc[-2, 0]
-            eps_pprev = trend_df.iloc[-3, 0]
-            
-            # [핵심] 1차 미분(속도) 및 2차 미분(가속도) 계산
-            growth_now = ((fwd_val - eps_prev) / abs(eps_prev)) * 100 if eps_prev != 0 else 0
-            growth_prev = ((eps_prev - eps_pprev) / abs(eps_pprev)) * 100 if eps_pprev != 0 else 0
-            
-            growth_val = growth_now
-            accel_val = growth_now - growth_prev
-            
-            # 신호 판정 로직
-            if fwd_val > eps_prev:
-                if accel_val > 0:
-                    trade_signal = "🚀 적극 매수 (성장 가속)"
-                    signal_color = "green"
-                else:
-                    trade_signal = "⚠️ 소극 대응 (탄력 둔화)"
-                    signal_color = "orange"
-            else:
-                trade_signal = "🚨 매도/관망 (역성장)"
-                signal_color = "red"
-        
-        # AI Opinion
-        ai_res = ask_ai(ticker, name, fwd_val, growth_val, f"{accel_val:+.2f}%p", bond_risk_msg, u_msg, trade_signal)
-        
-        # Result Display
+        # 결과 표시 UI 수정
         st.subheader(f"{name} ({ticker}) 분석 결과")
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c2, c3, c4, c5, c6 = st.columns(6) # 컬럼 확장
         c1.metric("현재 주가", p_fmt)
         c2.metric("12M Fwd EPS", f"{fwd_val:,.2f}")
-        c3.metric("성장률 (Speed)", f"{growth_val:+.2f}%", delta="증가" if growth_val>0 else "감소")
-        c4.metric("가속도 (Accel)", f"{accel_val:+.2f}%p", delta="가속" if accel_val>0 else "감속")
+        c3.metric("성장률(Speed)", f"{growth_val:+.2f}%")
+        c4.metric("가속도(Accel)", f"{accel_val:+.2f}%p")
         
-        st.success(f"🚦 시스템 신호: **{trade_signal}**")
-        with st.chat_message("assistant"): st.write(ai_res)
-        
-        st.subheader("📊 12개월 선행 EPS 추세선")
-        if not trend_df.empty:
-            
-            chart_data = trend_df.copy()
-            chart_data.index = chart_data.index.strftime('%Y.%m')
-            st.line_chart(chart_data)
-        
-        with st.expander("📋 원본 데이터 확인"):
-            if not df_ui.empty: st.dataframe(df_ui.T)
+        # [추가] PER, PBR 표시
+        per_val = f"{valuation['per']:.2f}" if isinstance(valuation['per'], (int, float)) else valuation['per']
+        pbr_val = f"{valuation['pbr']:.2f}" if isinstance(valuation['pbr'], (int, float)) else valuation['pbr']
+        c5.metric("PER", per_val)
+        c6.metric("PBR", pbr_val)

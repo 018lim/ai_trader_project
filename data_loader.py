@@ -105,6 +105,7 @@ def get_yahoo_data(ticker_code):
 def get_unified_data(ticker, country_code):
     merged_ui = {}
     trend_df = pd.DataFrame()
+    valuation = {"per": "N/A", "pbr": "N/A"} # 밸류에이션 저장용
     
     if country_code == "KR":
         df_raw = get_fnguide_data(ticker)
@@ -112,11 +113,31 @@ def get_unified_data(ticker, country_code):
             q_map = build_priority_map_kr(df_raw)
             trend_df = calculate_12m_fwd_series(q_map)
             merged_ui = df_raw.iloc[0].to_dict()
+            
+            # [추가] KR PER, PBR 가져오기 (FnGuide 스냅샷 데이터)
+            try:
+                code = re.sub(r'[^0-9]', '', ticker)
+                u = f"https://comp.fnguide.com/SVO2/ASP/SVD_Main.asp?pGB=1&gicode=A{code}"
+                r = requests.get(u, headers={'User-Agent': 'Mozilla/5.0'})
+                val_tables = pd.read_html(StringIO(r.text))
+                # 보통 첫 번째 테이블(snapshot)에 PER, PBR이 있음
+                snap = val_tables[0]
+                valuation["per"] = snap[snap[0].str.contains("PER", na=False)].iloc[0, 1]
+                valuation["pbr"] = snap[snap[0].str.contains("PBR", na=False)].iloc[0, 1]
+            except: pass
+            
     else:
         past, est_a, est_q = get_yahoo_data(ticker)
         q_map = build_priority_map_us(past, est_a, est_q)
         trend_df = calculate_12m_fwd_series(q_map)
         
+        # [추가] US PER, PBR 가져오기 (Yahoo Finance)
+        try:
+            s = yf.Ticker(ticker)
+            valuation["per"] = s.info.get('forwardPE') or s.info.get('trailingPE', "N/A")
+            valuation["pbr"] = s.info.get('priceToBook', "N/A")
+        except: pass
+
         if est_a:
             curr_y = datetime.date.today().year
             if curr_y in est_a: merged_ui['A|ThisYear'] = est_a[curr_y]
@@ -124,7 +145,7 @@ def get_unified_data(ticker, country_code):
         for y, q in sorted_past: merged_ui[f"Q|{y}.{q}Q"] = past[(y,q)]
 
     df_ui = pd.DataFrame([merged_ui], index=['EPS']) if merged_ui else pd.DataFrame()
-    return df_ui, trend_df
+    return df_ui, trend_df, valuation
 
 def find_ticker(user_input):
     mapping = {
