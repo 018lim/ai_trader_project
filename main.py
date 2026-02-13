@@ -28,14 +28,14 @@ with st.sidebar:
         st.markdown("""
         **1. 12M Fwd EPS**: Rolling Sum 방식
         **2. 가속도(2차 미분)**: 성장 속도의 변화
-        **3. 매크로**: CLI 국면 + 금리 위험 분석
+        **3. 매크로**: 국가별(KR/US) CLI 국면 분석
         """)
 
 st.title("📈 AI Quantitative Analyst Portfolio")
 st.markdown("##### :gray[Macro-Driven & Earnings Acceleration Strategy]")
 
 # -----------------------------------------------------------------------------
-# 1. Macro Dashboard
+# 1. Macro Dashboard (항상 표시됨)
 # -----------------------------------------------------------------------------
 y_c, h_s, cli = get_macro_data()
 y_val, h_val = 0, 0
@@ -48,7 +48,7 @@ if not h_s.empty: h_val = h_s.iloc[-1,0]
 if y_val < 0 and h_val >= 6.0: bond_risk_msg = "🚨 [심각] 금융 위기 (강력 매도)"
 elif y_val < 0: bond_risk_msg = "⚠️ [주의] 경기 침체 시그널"
 
-# CLI 지수 분석 변수 초기화
+# CLI 지수 분석 변수 초기화 (기본값)
 u_msg, u_col, u_val_str = "로딩 중", "gray", "-"
 k_msg, k_col, k_val_str = "로딩 중", "gray", "-"
 
@@ -65,7 +65,7 @@ if not cli.empty:
             k_msg, k_col = analyze_cli_trend(k.iloc[-1], k.iloc[-2], k.iloc[-3])
             k_val_str = f"{k.iloc[-1]:.2f}"
 
-# UI 출력
+# 매크로 UI 출력
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("장단기 금리차", f"{y_val:.2f}%p", delta="위험" if y_val<0 else "정상", delta_color="inverse")
 m2.metric("하이일드 스프레드", f"{h_val:.2f}%", delta="위험" if h_val>=6 else "안정", delta_color="inverse")
@@ -88,28 +88,19 @@ if run:
         except Exception:
             trend_df = None
 
-        # [핵심] 데이터가 없으면 경고 메시지 띄우고 여기서 멈춤 (st.stop)
+        # 데이터 부재 시 처리
         if trend_df is None or trend_df.empty or len(trend_df) < 2:
             st.error(f"❌ '{user_input}'에 대한 데이터를 찾을 수 없습니다.")
-            st.warning("""
-            **💡 검색 팁**
-            1. **미국 주식**: 한글명(팔란티어)이 안 되면 **티커(PLTR)**로 검색하세요.
-            2. **한국 주식**: 종목코드 6자리를 입력해보세요. (예: 005930)
-            3. 상장한 지 얼마 안 된 종목은 데이터가 부족할 수 있습니다.
-            """)
-            st.stop() # 이후 코드 실행 안 함
+            st.warning("티커(Ticker) 또는 정확한 종목명을 입력해주세요.")
+            st.stop()
 
-        # --- 데이터가 있을 때만 아래 코드가 실행됨 ---
-        
+        # --- 데이터가 있을 때만 실행 ---
         curr_p = 0
         try: curr_p = yf.Ticker(ticker).history(period='1d')['Close'].iloc[-1]
         except: pass
         p_fmt = f"${curr_p:,.2f}" if country=="US" else f"{curr_p:,.0f}원"
         
-        # 변수 초기화 및 계산
-        fwd_val, growth_val, accel_val = 0, 0, 0
-        trade_signal = "중립"
-        
+        # 변수 계산
         fwd_val = trend_df.iloc[-1, 0]
         eps_prev = trend_df.iloc[-2, 0]
         eps_pprev = trend_df.iloc[-3, 0] if len(trend_df) >= 3 else eps_prev
@@ -127,18 +118,21 @@ if run:
         else:
             trade_signal = "매도/관망 (역성장)"
         
-        # AI Opinion
-        ai_res = ask_ai(ticker, name, fwd_val, growth_val, f"{accel_val:+.2f}%p", bond_risk_msg, u_msg, trade_signal)
+        # [핵심 수정] 국가에 맞는 CLI 정보 선택 로직
+        target_cli_msg = u_msg # 기본값은 미국
+        if country == "KR":
+            target_cli_msg = k_msg # 한국 주식이면 한국 CLI 사용
         
-        # Result Display
+        # AI Opinion (선택된 target_cli_msg 전달)
+        ai_res = ask_ai(ticker, name, fwd_val, growth_val, f"{accel_val:+.2f}%p", bond_risk_msg, target_cli_msg, trade_signal)
+        
+        # 결과 출력
         st.subheader(f"{name} ({ticker}) 분석 결과")
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("현재 주가", p_fmt)
         c2.metric("12M Fwd EPS", f"{fwd_val:,.2f}")
         c3.metric("성장률 (Speed)", f"{growth_val:+.2f}%", delta="증가" if growth_val>0 else "감소")
         c4.metric("가속도 (Accel)", f"{accel_val:+.2f}%p", delta="가속" if accel_val>0 else "감속")
-        
-        # [확인] 시스템 신호 배너(st.success/st.info)는 완전히 제거되었습니다.
         
         with st.chat_message("assistant"): st.write(ai_res)
         
