@@ -35,6 +35,7 @@ def ask_ai(ticker, name, fwd, growth, accel_str, bond_msg, cli_msg, signal_msg):
         결론 이유 3가지:
         1. 매크로(CLI/채권)와 섹터의 적합성.
         2. 이익 모멘텀(가속도) 분석 결과.
+        3. {ticker}의 PER을 검색해서 평가해
         
         
         **반드시 한국어로 답변해 주세요.**
