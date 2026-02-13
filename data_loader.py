@@ -13,23 +13,33 @@ from logic import build_priority_map_kr, build_priority_map_us, calculate_12m_fw
 @st.cache_data(ttl=3600)
 def get_macro_data():
     start_date = datetime.datetime.now() - datetime.timedelta(days=1000)
+    
+    # 1. FRED 데이터 (금리)
     try:
         y = web.DataReader('T10Y2Y', 'fred', start_date).dropna()
         h = web.DataReader('BAMLH0A0HYM2', 'fred', start_date).dropna()
-    except: y, h = pd.DataFrame(), pd.DataFrame()
+    except: 
+        y, h = pd.DataFrame(), pd.DataFrame()
     
+    # 2. OECD CLI 데이터 (미국 & 한국)
     cli = pd.DataFrame()
-    for c, n in {'USA': '미국_CLI', 'KOR': '한국_CLI'}.items():
+    # OECD DSD_STES 데이터셋: LLI(Leading Indicators), AA(Amplitude Adjusted)
+    targets = {'USA': '미국_CLI', 'KOR': '한국_CLI'}
+    
+    for code, name in targets.items():
         try:
-            u = f"https://sdmx.oecd.org/public/rest/data/OECD.SDD.STES,DSD_STES@DF_CLI/{c}.M.LI...AA...H?dimensionAtObservation=AllDimensions&format=csvfilewithlabels"
-            r = requests.get(u, timeout=5)
+            # OECD 최신 API 경로 (데이터 구조 복구용)
+            url = f"https://sdmx.oecd.org/public/rest/data/OECD.SDD.STES,DSD_STES@DF_CLI/{code}.M.LI...AA...H?dimensionAtObservation=AllDimensions&format=csvfilewithlabels"
+            r = requests.get(url, timeout=10)
             if r.status_code == 200:
-                d = pd.read_csv(StringIO(r.text))
-                d['TIME_PERIOD'] = pd.to_datetime(d['TIME_PERIOD'])
-                d.set_index('TIME_PERIOD', inplace=True)
-                d.sort_index(inplace=True)
-                cli[n] = d['OBS_VALUE']
-        except: pass
+                df = pd.read_csv(StringIO(r.text))
+                # 데이터 필터링 및 전처리
+                df['TIME_PERIOD'] = pd.to_datetime(df['TIME_PERIOD'])
+                df = df.set_index('TIME_PERIOD').sort_index()
+                cli[name] = df['OBS_VALUE']
+        except Exception as e:
+            print(f"{name} 로딩 실패: {e}")
+            
     return y, h, cli
 
 @st.cache_data(ttl=3600)
