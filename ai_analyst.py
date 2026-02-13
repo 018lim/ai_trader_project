@@ -20,6 +20,7 @@ def ask_ai(ticker, name, fwd, growth, accel_str, bond_msg, cli_msg, signal_msg):
 
         [2. 종목 펀더멘털 (AI 자체 지식 활용)]
         - **섹터 판단**: 이 종목이 경기민감주(Cyclical)인지 방어주(Defensive)인지 판단하세요.
+        - {ticker}의 PER을 검색해서 평가해.
         
 
         [3. 이익 모멘텀 데이터]
@@ -35,7 +36,7 @@ def ask_ai(ticker, name, fwd, growth, accel_str, bond_msg, cli_msg, signal_msg):
         결론 이유 3가지:
         1. 매크로(CLI/채권)와 섹터의 적합성.
         2. 이익 모멘텀(가속도) 분석 결과.
-        3. {ticker}의 PER을 검색해서 평가해
+        3. {ticker}의 PER을 검색해서 평가해.
         
         
         **반드시 한국어로 답변해 주세요.**
