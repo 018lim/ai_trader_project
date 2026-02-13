@@ -128,7 +128,7 @@ def get_unified_data(ticker, country_code):
 
 def find_ticker(user_input):
     mapping = {
-        "테슬라": "TSLA", "애플": "AAPL", "마이크로소프트": "MSFT", "엔비디아": "NVDA",
+        "테슬라": "TSLA", "애플": "AAPL", "마이크로소프트": "MSFT", "엔비디아": "NVDA", "팔란티어":"PLTR",
         "구글": "GOOGL", "아마존": "AMZN", "메타": "META", "브로드컴": "AVGO",
         "티에스엠": "TSM", "AMD": "AMD", "인텔": "INTC", "마이크론": "MU",
         "스타벅스": "SBUX", "코카콜라": "KO", "나이키": "NKE", "리얼티인컴": "O"

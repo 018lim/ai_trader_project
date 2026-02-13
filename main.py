@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import os
 import yfinance as yf
 
-# 커스텀 모듈 임포트 (확실하게 연결됨)
+# 커스텀 모듈 임포트
 from data_loader import get_macro_data, get_unified_data, find_ticker
 from logic import analyze_cli_trend
 from ai_analyst import ask_ai
@@ -34,7 +34,9 @@ with st.sidebar:
 st.title("📈 AI Quantitative Analyst Portfolio")
 st.markdown("##### :gray[Macro-Driven & Earnings Acceleration Strategy]")
 
-# 1. Macro Dashboard (수정된 부분)
+# -----------------------------------------------------------------------------
+# 1. Macro Dashboard
+# -----------------------------------------------------------------------------
 y_c, h_s, cli = get_macro_data()
 y_val, h_val = 0, 0
 bond_risk_msg = "안정"
@@ -51,21 +53,19 @@ u_msg, u_col, u_val_str = "로딩 중", "gray", "-"
 k_msg, k_col, k_val_str = "로딩 중", "gray", "-"
 
 if not cli.empty:
-    # 미국 분석
     if '미국_CLI' in cli.columns:
         u = cli['미국_CLI'].dropna()
         if len(u) >= 3:
             u_msg, u_col = analyze_cli_trend(u.iloc[-1], u.iloc[-2], u.iloc[-3])
             u_val_str = f"{u.iloc[-1]:.2f}"
     
-    # 한국 분석 (이 부분이 누락되었었습니다!)
     if '한국_CLI' in cli.columns:
         k = cli['한국_CLI'].dropna()
         if len(k) >= 3:
             k_msg, k_col = analyze_cli_trend(k.iloc[-1], k.iloc[-2], k.iloc[-3])
             k_val_str = f"{k.iloc[-1]:.2f}"
 
-# UI 출력 (4개의 컬럼으로 확장)
+# UI 출력
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("장단기 금리차", f"{y_val:.2f}%p", delta="위험" if y_val<0 else "정상", delta_color="inverse")
 m2.metric("하이일드 스프레드", f"{h_val:.2f}%", delta="위험" if h_val>=6 else "안정", delta_color="inverse")
@@ -74,45 +74,58 @@ m4.metric("🇰🇷 한국 CLI", k_val_str)
 
 st.caption(f"📊 매크로 진단: **미국 :{u_col}[{u_msg}]** / **한국 :{k_col}[{k_msg}]** / **채권 시장 {bond_risk_msg}**")
 
-# 2. Analysis Execution
+# -----------------------------------------------------------------------------
+# 2. Analysis Execution (종목 분석)
+# -----------------------------------------------------------------------------
 if run:
     st.divider()
-    with st.spinner(f"🔍 '{user_input}' 정밀 분석 중..."):
+    with st.spinner(f"🔍 '{user_input}' 데이터를 검색 중입니다..."):
         ticker, name, country = find_ticker(user_input)
-        df_ui, trend_df = get_unified_data(ticker, country)
+        
+        # 데이터 가져오기 시도
+        try:
+            df_ui, trend_df = get_unified_data(ticker, country)
+        except Exception:
+            trend_df = None
+
+        # [핵심] 데이터가 없으면 경고 메시지 띄우고 여기서 멈춤 (st.stop)
+        if trend_df is None or trend_df.empty or len(trend_df) < 2:
+            st.error(f"❌ '{user_input}'에 대한 데이터를 찾을 수 없습니다.")
+            st.warning("""
+            **💡 검색 팁**
+            1. **미국 주식**: 한글명(팔란티어)이 안 되면 **티커(PLTR)**로 검색하세요.
+            2. **한국 주식**: 종목코드 6자리를 입력해보세요. (예: 005930)
+            3. 상장한 지 얼마 안 된 종목은 데이터가 부족할 수 있습니다.
+            """)
+            st.stop() # 이후 코드 실행 안 함
+
+        # --- 데이터가 있을 때만 아래 코드가 실행됨 ---
         
         curr_p = 0
         try: curr_p = yf.Ticker(ticker).history(period='1d')['Close'].iloc[-1]
         except: pass
         p_fmt = f"${curr_p:,.2f}" if country=="US" else f"{curr_p:,.0f}원"
         
+        # 변수 초기화 및 계산
         fwd_val, growth_val, accel_val = 0, 0, 0
-        trade_signal = "데이터 부족"
-        signal_color = "gray"
+        trade_signal = "중립"
         
-        if not trend_df.empty and len(trend_df) >= 3:
-            fwd_val = trend_df.iloc[-1, 0]
-            eps_prev = trend_df.iloc[-2, 0]
-            eps_pprev = trend_df.iloc[-3, 0]
-            
-            # [핵심] 1차 미분(속도) 및 2차 미분(가속도) 계산
-            growth_now = ((fwd_val - eps_prev) / abs(eps_prev)) * 100 if eps_prev != 0 else 0
-            growth_prev = ((eps_prev - eps_pprev) / abs(eps_pprev)) * 100 if eps_pprev != 0 else 0
-            
-            growth_val = growth_now
-            accel_val = growth_now - growth_prev
-            
-            # 신호 판정 로직
-            if fwd_val > eps_prev:
-                if accel_val > 0:
-                    trade_signal = "🚀 적극 매수 (성장 가속)"
-                    signal_color = "green"
-                else:
-                    trade_signal = "⚠️ 소극 대응 (탄력 둔화)"
-                    signal_color = "orange"
-            else:
-                trade_signal = "🚨 매도/관망 (역성장)"
-                signal_color = "red"
+        fwd_val = trend_df.iloc[-1, 0]
+        eps_prev = trend_df.iloc[-2, 0]
+        eps_pprev = trend_df.iloc[-3, 0] if len(trend_df) >= 3 else eps_prev
+        
+        growth_now = ((fwd_val - eps_prev) / abs(eps_prev)) * 100 if eps_prev != 0 else 0
+        growth_prev = ((eps_prev - eps_pprev) / abs(eps_pprev)) * 100 if eps_pprev != 0 else 0
+        
+        growth_val = growth_now
+        accel_val = growth_now - growth_prev
+        
+        # 신호 판정
+        if fwd_val > eps_prev:
+            if accel_val > 0: trade_signal = "적극 매수 (성장 가속)"
+            else: trade_signal = "소극 대응 (탄력 둔화)"
+        else:
+            trade_signal = "매도/관망 (역성장)"
         
         # AI Opinion
         ai_res = ask_ai(ticker, name, fwd_val, growth_val, f"{accel_val:+.2f}%p", bond_risk_msg, u_msg, trade_signal)
@@ -125,15 +138,14 @@ if run:
         c3.metric("성장률 (Speed)", f"{growth_val:+.2f}%", delta="증가" if growth_val>0 else "감소")
         c4.metric("가속도 (Accel)", f"{accel_val:+.2f}%p", delta="가속" if accel_val>0 else "감속")
         
+        # [확인] 시스템 신호 배너(st.success/st.info)는 완전히 제거되었습니다.
         
         with st.chat_message("assistant"): st.write(ai_res)
         
         st.subheader("📊 12개월 선행 EPS 추세선")
-        if not trend_df.empty:
-            
-            chart_data = trend_df.copy()
-            chart_data.index = chart_data.index.strftime('%Y.%m')
-            st.line_chart(chart_data)
+        chart_data = trend_df.copy()
+        chart_data.index = chart_data.index.strftime('%Y.%m')
+        st.line_chart(chart_data)
         
         with st.expander("📋 원본 데이터 확인"):
             if not df_ui.empty: st.dataframe(df_ui.T)
