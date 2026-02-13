@@ -20,7 +20,7 @@ def ask_ai(ticker, name, fwd, growth, accel_str, bond_msg, cli_msg, signal_msg):
 
         [2. 종목 펀더멘털 (AI 자체 지식 활용)]
         - **섹터 판단**: 이 종목이 경기민감주(Cyclical)인지 방어주(Defensive)인지 판단하세요.
-        - **밸류에이션**: PER과 PBR을 고려해서 평가하세요.
+        
 
         [3. 이익 모멘텀 데이터]
         - 12M Fwd EPS: {fwd:,.2f}
