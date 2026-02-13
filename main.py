@@ -34,7 +34,7 @@ with st.sidebar:
 st.title("📈 AI Quantitative Analyst Portfolio")
 st.markdown("##### :gray[Macro-Driven & Earnings Acceleration Strategy]")
 
-# 1. Macro Dashboard
+# 1. Macro Dashboard (수정된 부분)
 y_c, h_s, cli = get_macro_data()
 y_val, h_val = 0, 0
 bond_risk_msg = "안정"
@@ -42,23 +42,37 @@ bond_risk_msg = "안정"
 if not y_c.empty: y_val = y_c.iloc[-1,0]
 if not h_s.empty: h_val = h_s.iloc[-1,0]
 
-# 매크로 위험 로직 (금리 역전 + 스프레드)
+# 채권 위험 로직
 if y_val < 0 and h_val >= 6.0: bond_risk_msg = "🚨 [심각] 금융 위기 (강력 매도)"
 elif y_val < 0: bond_risk_msg = "⚠️ [주의] 경기 침체 시그널"
 
-u_msg, u_col = "로딩 중", "gray"
-u_val_str = "-"
-if not cli.empty:
-    u = cli['미국_CLI'].dropna()
-    if len(u) >= 3:
-        u_msg, u_col = analyze_cli_trend(u.iloc[-1], u.iloc[-2], u.iloc[-3])
-        u_val_str = f"{u.iloc[-1]:.2f}"
+# CLI 지수 분석 변수 초기화
+u_msg, u_col, u_val_str = "로딩 중", "gray", "-"
+k_msg, k_col, k_val_str = "로딩 중", "gray", "-"
 
-m1, m2, m3 = st.columns(3)
+if not cli.empty:
+    # 미국 분석
+    if '미국_CLI' in cli.columns:
+        u = cli['미국_CLI'].dropna()
+        if len(u) >= 3:
+            u_msg, u_col = analyze_cli_trend(u.iloc[-1], u.iloc[-2], u.iloc[-3])
+            u_val_str = f"{u.iloc[-1]:.2f}"
+    
+    # 한국 분석 (이 부분이 누락되었었습니다!)
+    if '한국_CLI' in cli.columns:
+        k = cli['한국_CLI'].dropna()
+        if len(k) >= 3:
+            k_msg, k_col = analyze_cli_trend(k.iloc[-1], k.iloc[-2], k.iloc[-3])
+            k_val_str = f"{k.iloc[-1]:.2f}"
+
+# UI 출력 (4개의 컬럼으로 확장)
+m1, m2, m3, m4 = st.columns(4)
 m1.metric("장단기 금리차", f"{y_val:.2f}%p", delta="위험" if y_val<0 else "정상", delta_color="inverse")
 m2.metric("하이일드 스프레드", f"{h_val:.2f}%", delta="위험" if h_val>=6 else "안정", delta_color="inverse")
-m3.metric("🇺🇸 CLI 추세", u_val_str, delta=None) 
-st.caption(f"📊 매크로 진단: **미국 CLI :{u_col}[{u_msg}]** / **채권 시장 {bond_risk_msg}**")
+m3.metric("🇺🇸 미국 CLI", u_val_str)
+m4.metric("🇰🇷 한국 CLI", k_val_str)
+
+st.caption(f"📊 매크로 진단: **미국 :{u_col}[{u_msg}]** / **한국 :{k_col}[{k_msg}]** / **채권 시장 {bond_risk_msg}**")
 
 # 2. Analysis Execution
 if run:
