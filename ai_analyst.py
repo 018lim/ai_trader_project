@@ -20,8 +20,6 @@ def ask_ai(ticker, name, fwd, growth, accel_str, bond_msg, cli_msg, signal_msg):
 
         [2. 종목 펀더멘털 (AI 자체 지식 활용)]
         - **섹터 판단**: 이 종목이 경기민감주(Cyclical)인지 방어주(Defensive)인지 판단하세요.
-        - 현재 PER: {per}
-        - 현재 PBR: {pbr}
         
 
         [3. 이익 모멘텀 데이터]
@@ -32,14 +30,11 @@ def ask_ai(ticker, name, fwd, growth, accel_str, bond_msg, cli_msg, signal_msg):
 
         [4. 최종 투자 전략]
         이 글은 투자권유가 아니며 투자의 책임은 본인에게 있습니다. 이글을 맨 앞에 명시해
-
-        위의 요소들을 종합적으로 고려해서 평가해
         경기 민감주는 메크로 위험평가에 가중을 더 두고, 경기 방어주는 메크로 위험 평가 가중을 덜 줘.
         
         결론 이유 3가지:
         1. 매크로(CLI/채권)와 섹터의 적합성.
         2. 이익 모멘텀(가속도) 분석 결과.
-        3. 벨류에이션(per,pbr) 분석결과
         
         
         **반드시 한국어로 답변해 주세요.**
