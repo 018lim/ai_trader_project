@@ -139,7 +139,7 @@ def find_ticker(user_input):
         df_krx = fdr.StockListing('KRX')
         st.write(f"1. KRX 전체 종목 수: {len(df_krx)}개")
         match = df_krx[df_krx['Name'] == user_input]
-        st.write(f"match: {match)}개")
+       
         if not match.empty:
             code = match.iloc[0]['Code']
             mkt = match.iloc[0]['Market']
