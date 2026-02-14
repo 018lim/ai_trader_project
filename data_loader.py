@@ -137,7 +137,9 @@ def find_ticker(user_input):
     if user_input in mapping: return mapping[user_input], f"{user_input} ({mapping[user_input]})", "US"
     try:
         df_krx = fdr.StockListing('KRX')
+        st.write(f"1. KRX 전체 종목 수: {len(df_krx)}개")
         match = df_krx[df_krx['Name'] == user_input]
+        st.write(f"match: {match)}개")
         if not match.empty:
             code = match.iloc[0]['Code']
             mkt = match.iloc[0]['Market']
