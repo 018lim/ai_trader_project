@@ -81,20 +81,26 @@ if run:
     st.divider()
     with st.spinner(f"🔍 '{user_input}' 데이터를 검색 중입니다..."):
         ticker, name, country = find_ticker(user_input)
-        df_ui, trend_df = get_unified_data(ticker, country)
+        
         
         # 데이터 가져오기 시도
+       # 데이터 가져오기 시도
         try:
+            # 1. 함수 실행
             df_ui, trend_df = get_unified_data(ticker, country)
-        except Exception:
+            
+            # 2. (디버깅용) 데이터 잘 왔는지 확인
+            st.write(f"✅ 데이터 로딩 성공! 행 개수: {len(trend_df)}") 
+
+        except Exception as e:
+            # 🚨 여기가 핵심! 에러 메시지를 화면에 빨갛게 출력합니다.
+            st.error(f"🚨 데이터 가져오기 실패 원인: {e}")
+            
+            # (선택) 더 자세한 정보 출력 (어떤 티커에서 에러났는지)
+            st.write(f"시도한 티커: {ticker}, 국가: {country}")
+            
             trend_df = None
-
-        # 데이터 부재 시 처리
-        if trend_df is None or trend_df.empty or len(trend_df) < 2:
-            st.error(f"❌ '{user_input}'에 대한 데이터를 찾을 수 없습니다.")
-            st.warning("티커(Ticker) 또는 정확한 종목명을 입력해주세요.")
-            st.stop()
-
+            df_ui = None
         # --- 데이터가 있을 때만 실행 ---
         curr_p = 0
         try: curr_p = yf.Ticker(ticker).history(period='1d')['Close'].iloc[-1]
