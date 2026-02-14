@@ -81,6 +81,7 @@ if run:
     st.divider()
     with st.spinner(f"🔍 '{user_input}' 데이터를 검색 중입니다..."):
         ticker, name, country = find_ticker(user_input)
+        df_ui, trend_df = get_unified_data(ticker, country)
         
         # 데이터 가져오기 시도
         try:
