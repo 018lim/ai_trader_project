@@ -1,7 +1,7 @@
 streamlit
 pandas
 pandas_datareader
-yfinance>=0.3.0
+yfinance
 finance-datareader
 matplotlib
 requests
