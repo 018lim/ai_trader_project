@@ -1,5 +1,5 @@
 streamlit
-pandas
+pandas==2.1.4
 yfinance
 finance-datareader
 matplotlib
@@ -8,5 +8,6 @@ langchain-google-genai
 python-dotenv
 lxml
 html5lib
+bs4
 beautifulsoup4
 openpyxl
