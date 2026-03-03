@@ -44,11 +44,9 @@ bond_risk_msg = "안정"
 if not y_c.empty: y_val = y_c.iloc[-1,0]
 if not h_s.empty: h_val = h_s.iloc[-1,0]
 
-# 채권 위험 로직
 if y_val < 0 and h_val >= 6.0: bond_risk_msg = "🚨 [심각] 금융 위기 (강력 매도)"
 elif y_val < 0: bond_risk_msg = "⚠️ [주의] 경기 침체 시그널"
 
-# CLI 지수 분석 변수 초기화 (기본값)
 u_msg, u_col, u_val_str = "로딩 중", "gray", "-"
 k_msg, k_col, k_val_str = "로딩 중", "gray", "-"
 
@@ -65,7 +63,6 @@ if not cli.empty:
             k_msg, k_col = analyze_cli_trend(k.iloc[-1], k.iloc[-2], k.iloc[-3])
             k_val_str = f"{k.iloc[-1]:.2f}"
 
-# 매크로 UI 출력
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("장단기 금리차", f"{y_val:.2f}%p", delta="위험" if y_val<0 else "정상", delta_color="inverse")
 m2.metric("하이일드 스프레드", f"{h_val:.2f}%", delta="위험" if h_val>=6 else "안정", delta_color="inverse")
@@ -80,25 +77,39 @@ st.caption(f"📊 매크로 진단: **미국 :{u_col}[{u_msg}]** / **한국 :{k_
 if run:
     st.divider()
     with st.spinner(f"🔍 '{user_input}' 데이터를 검색 중입니다..."):
+        # 1. 번역기 실행
         ticker, name, country = find_ticker(user_input)
         
+        # 🚀 [디버깅용 UI 추가] 번역기가 제대로 작동했는지 화면에 표시합니다.
+        st.info(f"💡 **시스템 로그:** 사용자가 입력한 '{user_input}' ➔ **{ticker}** ({country} 시장)으로 인식했습니다.")
         
-        # 데이터 가져오기 시도
+        # 만약 번역이 안 되고 한글이 그대로 ticker로 들어갔다면 강제 종료
+        if country == "US" and any('\uac00' <= char <= '\ud7a3' for char in ticker):
+            st.error("🚨 한글 종목명을 티커로 변환하지 못했습니다. 번역기(data_loader.py)에 문제가 있습니다.")
+            st.stop()
+            
+        # 2. 데이터 가져오기
         try:
             df_ui, trend_df = get_unified_data(ticker, country)
-        except Exception:
+        except Exception as e:
             trend_df = None
+            st.error(f"데이터 수집 중 에러: {e}")
 
-        # 데이터 부재 시 처리
+        # 3. 데이터 부재 시 처리
         if trend_df is None or trend_df.empty or len(trend_df) < 2:
-            st.error(f"❌ '{user_input}'에 대한 데이터를 찾을 수 없습니다.")
+            st.error(f"❌ '{ticker}'에 대한 재무 데이터를 찾을 수 없습니다.")
             st.warning("티커(Ticker) 또는 정확한 종목명을 입력해주세요.")
             st.stop()
 
-        # --- 데이터가 있을 때만 실행 ---
+        # 4. 현재 주가 가져오기 (에러 방어 로직 강화)
         curr_p = 0
-        try: curr_p = yf.Ticker(ticker).history(period='1d')['Close'].iloc[-1]
-        except: pass
+        try: 
+            stock_data = yf.Ticker(ticker).history(period='1d')
+            if not stock_data.empty:
+                curr_p = stock_data['Close'].iloc[-1]
+        except: 
+            pass # 404 에러가 나도 앱이 뻗지 않고 그냥 주가를 0으로 처리함
+            
         p_fmt = f"${curr_p:,.2f}" if country=="US" else f"{curr_p:,.0f}원"
         
         # 변수 계산
@@ -119,12 +130,9 @@ if run:
         else:
             trade_signal = "매도/관망 (역성장)"
         
-        # [핵심 수정] 국가에 맞는 CLI 정보 선택 로직
-        target_cli_msg = u_msg # 기본값은 미국
-        if country == "KR":
-            target_cli_msg = k_msg # 한국 주식이면 한국 CLI 사용
+        target_cli_msg = k_msg if country == "KR" else u_msg
         
-        # AI Opinion (선택된 target_cli_msg 전달)
+        # AI Opinion
         ai_res = ask_ai(ticker, name, fwd_val, growth_val, f"{accel_val:+.2f}%p", bond_risk_msg, target_cli_msg, trade_signal)
         
         # 결과 출력
