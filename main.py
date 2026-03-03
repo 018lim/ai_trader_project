@@ -79,14 +79,6 @@ if run:
     with st.spinner(f"🔍 '{user_input}' 데이터를 검색 중입니다..."):
         # 1. 번역기 실행
         ticker, name, country = find_ticker(user_input)
-        
-        # 🚀 [디버깅용 UI 추가] 번역기가 제대로 작동했는지 화면에 표시합니다.
-        st.info(f"💡 **시스템 로그:** 사용자가 입력한 '{user_input}' ➔ **{ticker}** ({country} 시장)으로 인식했습니다.")
-        
-        # 만약 번역이 안 되고 한글이 그대로 ticker로 들어갔다면 강제 종료
-        if country == "US" and any('\uac00' <= char <= '\ud7a3' for char in ticker):
-            st.error("🚨 한글 종목명을 티커로 변환하지 못했습니다. 번역기(data_loader.py)에 문제가 있습니다.")
-            st.stop()
             
         # 2. 데이터 가져오기
         try:
@@ -101,14 +93,14 @@ if run:
             st.warning("티커(Ticker) 또는 정확한 종목명을 입력해주세요.")
             st.stop()
 
-        # 4. 현재 주가 가져오기 (에러 방어 로직 강화)
+        # 4. 현재 주가 가져오기 (에러 방어 로직)
         curr_p = 0
         try: 
             stock_data = yf.Ticker(ticker).history(period='1d')
             if not stock_data.empty:
                 curr_p = stock_data['Close'].iloc[-1]
         except: 
-            pass # 404 에러가 나도 앱이 뻗지 않고 그냥 주가를 0으로 처리함
+            pass # 일시적 오류 시 앱이 멈추지 않고 넘어감
             
         p_fmt = f"${curr_p:,.2f}" if country=="US" else f"{curr_p:,.0f}원"
         
