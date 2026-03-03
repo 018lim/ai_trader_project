@@ -2,38 +2,38 @@ import streamlit as st
 import pandas as pd
 import pandas_datareader.data as web
 import yfinance as yf
-import FinanceDataReader as fdr
 import requests
 import re
 import datetime
 from io import StringIO
-# logic.py에서 함수들 가져오기
+
+# logic.py에서 함수들 가져오기 (기존 프로젝트 구조 유지)
 from logic import build_priority_map_kr, build_priority_map_us, calculate_12m_fwd_series
 
+# -----------------------------------------------------------
+# 1. 거시경제(Macro) 데이터 수집
+# -----------------------------------------------------------
 @st.cache_data(ttl=3600)
 def get_macro_data():
     start_date = datetime.datetime.now() - datetime.timedelta(days=1000)
     
-    # 1. FRED 데이터 (금리)
+    # 1) FRED 데이터 (금리)
     try:
         y = web.DataReader('T10Y2Y', 'fred', start_date).dropna()
         h = web.DataReader('BAMLH0A0HYM2', 'fred', start_date).dropna()
     except: 
         y, h = pd.DataFrame(), pd.DataFrame()
     
-    # 2. OECD CLI 데이터 (미국 & 한국)
+    # 2) OECD CLI 데이터 (미국 & 한국)
     cli = pd.DataFrame()
-    # OECD DSD_STES 데이터셋: LLI(Leading Indicators), AA(Amplitude Adjusted)
     targets = {'USA': '미국_CLI', 'KOR': '한국_CLI'}
     
     for code, name in targets.items():
         try:
-            # OECD 최신 API 경로 (데이터 구조 복구용)
             url = f"https://sdmx.oecd.org/public/rest/data/OECD.SDD.STES,DSD_STES@DF_CLI/{code}.M.LI...AA...H?dimensionAtObservation=AllDimensions&format=csvfilewithlabels"
             r = requests.get(url, timeout=10)
             if r.status_code == 200:
                 df = pd.read_csv(StringIO(r.text))
-                # 데이터 필터링 및 전처리
                 df['TIME_PERIOD'] = pd.to_datetime(df['TIME_PERIOD'])
                 df = df.set_index('TIME_PERIOD').sort_index()
                 cli[name] = df['OBS_VALUE']
@@ -42,6 +42,9 @@ def get_macro_data():
             
     return y, h, cli
 
+# -----------------------------------------------------------
+# 2. 개별 주식 재무 데이터 수집 (한국: FnGuide, 미국: Yahoo)
+# -----------------------------------------------------------
 @st.cache_data(ttl=3600)
 def get_fnguide_data(ticker_code):
     code = re.sub(r'[^0-9]', '', ticker_code)
@@ -126,24 +129,68 @@ def get_unified_data(ticker, country_code):
     df_ui = pd.DataFrame([merged_ui], index=['EPS']) if merged_ui else pd.DataFrame()
     return df_ui, trend_df
 
+# -----------------------------------------------------------
+# 3. 🛡️ 3중 방어 티커 검색 시스템 (핵심 개선 사항)
+# -----------------------------------------------------------
+@st.cache_data(ttl=86400) # 하루(86400초) 동안 CSV 데이터 캐싱
+def get_krx_csv_cache():
+    try:
+        # fdr 대신 안정적인 KRX 전체 목록 CSV 파일을 읽어옵니다.
+        url = "https://raw.githubusercontent.com/corazzon/finance-data-analysis/main/krx.csv"
+        df = pd.read_csv(url, dtype={'Symbol': str}) 
+        df['CleanName'] = df['Name'].astype(str).str.replace(" ", "").str.upper()
+        return df
+    except Exception as e:
+        print(f"⚠️ CSV 백업 로딩 실패: {e}")
+        return None
+
 def find_ticker(user_input):
+    original_input = user_input.strip()
+    clean_input = original_input.replace(" ", "").upper()
+    
+    # [1단계] 하드코딩 사전
     mapping = {
         "테슬라": "TSLA", "애플": "AAPL", "마이크로소프트": "MSFT", "엔비디아": "NVDA", "팔란티어":"PLTR",
         "구글": "GOOGL", "아마존": "AMZN", "메타": "META", "브로드컴": "AVGO",
         "티에스엠": "TSM", "AMD": "AMD", "인텔": "INTC", "마이크론": "MU",
-        "스타벅스": "SBUX", "코카콜라": "KO", "나이키": "NKE", "리얼티인컴": "O"
+        "스타벅스": "SBUX", "코카콜라": "KO", "나이키": "NKE", "리얼티인컴": "O",
+        "삼성전자": "005930.KS", "SK하이닉스": "000660.KS", "카카오": "035720.KS", "네이버": "035420.KS",
+        "현대차": "005380.KS", "기아": "000270.KS"
     }
-    user_input = user_input.strip()
-    if user_input in mapping: return mapping[user_input], f"{user_input} ({mapping[user_input]})", "US"
-    try:
-        df_krx = fdr.StockListing('KRX')
-        
-        match = df_krx[df_krx['Name'] == user_input]
-       
+    
+    for key, val in mapping.items():
+        if key.replace(" ", "").upper() == clean_input:
+            country = "KR" if (".KS" in val or ".KQ" in val) else "US"
+            return val, original_input, country
+
+    # [2단계] 안정적인 CSV 백업본 직접 호출 (한국 주식 찾기)
+    krx_df = get_krx_csv_cache()
+    if krx_df is not None:
+        match = krx_df[krx_df['CleanName'] == clean_input]
         if not match.empty:
-            code = match.iloc[0]['Code']
-            mkt = match.iloc[0]['Market']
-            suffix = ".KS" if mkt == 'KOSPI' else ".KQ"
-            return f"{code}{suffix}", user_input, "KR"
-    except: pass
-    return user_input.upper(), user_input, "US"
+            code = str(match.iloc[0]['Symbol']).zfill(6)
+            mkt = str(match.iloc[0].get('Market', 'KOSPI')).upper()
+            suffix = ".KQ" if 'KOSDAQ' in mkt else ".KS"
+            return f"{code}{suffix}", original_input, "KR"
+
+    # [3단계] 최후의 보루 야후 파이낸스 자체 검색 API
+    try:
+        url = f"https://query2.finance.yahoo.com/v1/finance/search?q={original_input}"
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        res = requests.get(url, headers=headers, timeout=5)
+        
+        if res.status_code == 200:
+            quotes = res.json().get('quotes', [])
+            if quotes:
+                for q in quotes:
+                    sym = q.get('symbol', '')
+                    if sym.endswith('.KS') or sym.endswith('.KQ'):
+                        return sym, original_input, "KR"
+                
+                first_sym = quotes[0].get('symbol', '')
+                return first_sym, original_input, "US"
+    except Exception as e:
+        print(f"🚨 야후 검색 API 실패: {e}")
+
+    # 다 실패하면 사용자가 직접 입력한 값 그대로 리턴
+    return original_input.upper(), original_input, "US"
