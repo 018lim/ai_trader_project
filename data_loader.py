@@ -70,39 +70,74 @@ def get_fnguide_data(ticker_code):
     except: return None
 
 @st.cache_data(ttl=3600)
+# [디버그용] 캐시 기능을 임시로 껐습니다.
 def get_yahoo_data(ticker_code):
+    import streamlit as st
+    st.info(f"🐛 [디버그 1단계] 야후 파이낸스에 '{ticker_code}' 데이터 요청 시작...")
+    
     try:
         stock = yf.Ticker(ticker_code)
         past_map, est_annual, est_quarter = {}, {}, {}
         
-        hist = stock.earnings_history
-        if hist is not None:
-            for idx, row in hist.iterrows():
-                if pd.notna(row['epsActual']):
-                    past_map[(idx.year, (idx.month-1)//3+1)] = float(row['epsActual'])
-        
-        est = stock.earnings_estimate
-        if est is not None:
-            est.index = est.index.astype(str).str.strip()
-            curr_y = datetime.date.today().year
-            for term, offset in [('0y',0), ('+1y',1), ('+5y',5)]:
-                if term in est.index:
-                    val = est.loc[term, 'avg']
-                    if pd.notna(val): est_annual[curr_y+offset] = float(val)
-            
-            if '0q' in est.index:
-                val = est.loc['0q', 'avg']
-                if pd.notna(val): est_quarter[(curr_y, (datetime.date.today().month-1)//3+1)] = float(val)
-            if '+1q' in est.index:
-                val = est.loc['+1q', 'avg']
-                if pd.notna(val):
-                    nm = datetime.date.today().month + 3
-                    ny = curr_y + (1 if nm > 12 else 0)
-                    nq = ((nm-1)//3+1) if nm <= 12 else 1
-                    est_quarter[(ny, nq)] = float(val)
+        # ---------------------------------------------------------
+        # 🔍 검사 1: earnings_history (과거 실적)
+        # ---------------------------------------------------------
+        try:
+            hist = stock.earnings_history
+            if hist is None:
+                st.error("🚨 [디버그: 과거 실적] earnings_history가 'None'으로 반환되었습니다. (야후가 막았음)")
+            elif hist.empty:
+                st.warning("⚠️ [디버그: 과거 실적] earnings_history는 응답했지만, 내용이 텅 비어있습니다 (Empty).")
+            else:
+                st.success("✅ [디버그: 과거 실적] 데이터를 성공적으로 받아왔습니다!")
+                st.dataframe(hist) # 실제 어떤 데이터가 오는지 화면에 출력
+                for idx, row in hist.iterrows():
+                    if pd.notna(row['epsActual']):
+                        past_map[(idx.year, (idx.month-1)//3+1)] = float(row['epsActual'])
+        except Exception as e:
+            st.error(f"❌ [디버그: 과거 실적] 코드 실행 중 에러 발생: {e}")
 
+        # ---------------------------------------------------------
+        # 🔍 검사 2: earnings_estimate (미래 추정치)
+        # ---------------------------------------------------------
+        try:
+            est = stock.earnings_estimate
+            if est is None:
+                st.error("🚨 [디버그: 미래 실적] earnings_estimate가 'None'으로 반환되었습니다. (야후가 막았음)")
+            elif est.empty:
+                st.warning("⚠️ [디버그: 미래 실적] earnings_estimate는 응답했지만, 내용이 텅 비어있습니다 (Empty).")
+            else:
+                st.success("✅ [디버그: 미래 실적] 데이터를 성공적으로 받아왔습니다!")
+                st.dataframe(est) # 실제 어떤 데이터가 오는지 화면에 출력
+                est.index = est.index.astype(str).str.strip()
+                curr_y = datetime.date.today().year
+                for term, offset in [('0y',0), ('+1y',1), ('+5y',5)]:
+                    if term in est.index:
+                        val = est.loc[term, 'avg']
+                        if pd.notna(val): est_annual[curr_y+offset] = float(val)
+                
+                if '0q' in est.index:
+                    val = est.loc['0q', 'avg']
+                    if pd.notna(val): est_quarter[(curr_y, (datetime.date.today().month-1)//3+1)] = float(val)
+                if '+1q' in est.index:
+                    val = est.loc['+1q', 'avg']
+                    if pd.notna(val):
+                        nm = datetime.date.today().month + 3
+                        ny = curr_y + (1 if nm > 12 else 0)
+                        nq = ((nm-1)//3+1) if nm <= 12 else 1
+                        est_quarter[(ny, nq)] = float(val)
+        except Exception as e:
+            st.error(f"❌ [디버그: 미래 실적] 코드 실행 중 에러 발생: {e}")
+
+        # 최종 추출된 데이터 개수 요약
+        st.info(f"📝 [디버그 최종 결과] 확보된 과거 EPS: {len(past_map)}개 / 확보된 미래 EPS: {len(est_annual)}개")
+        
         return past_map, est_annual, est_quarter
-    except: return {}, {}, {}
+        
+    except Exception as e:
+        import streamlit as st
+        st.error(f"🚨 [디버그 치명적 에러] get_yahoo_data 전체가 뻗었습니다: {e}")
+        return {}, {}, {}
 
 @st.cache_data(ttl=3600)
 def get_unified_data(ticker, country_code):
