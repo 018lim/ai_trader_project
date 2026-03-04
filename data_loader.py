@@ -69,49 +69,78 @@ def get_fnguide_data(ticker_code):
         return pd.DataFrame([merged], index=['EPS']) if merged else None
     except: return None
 
-@st.cache_data(ttl=3600)  # 다시 캐시를 켜서 한 번 받은 데이터는 서버에 저장합니다!
+@st.cache_data(ttl=3600)  # 성공 로직이므로 캐시를 정상적으로 켭니다!
 def get_yahoo_data(ticker_code):
-    import requests
+    import datetime
+    import pandas as pd
+    import yfinance as yf
+    
     try:
-        # 🛡️ 1. 위장용 신분증(Session) 만들기: 봇이 아니라 크롬 브라우저인 척 위장
-        session = requests.Session()
-        session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        })
-        
-        # 🛡️ 2. 신분증을 들고 야후에 접속
-        stock = yf.Ticker(ticker_code, session=session)
+        # 🚨 [핵심] 세션 위장 코드를 지우고, 똑똑해진 yfinance 자체 우회 엔진에 전적으로 맡깁니다!
+        stock = yf.Ticker(ticker_code)
         past_map, est_annual, est_quarter = {}, {}, {}
         
-        hist = stock.earnings_history
-        if hist is not None:
-            for idx, row in hist.iterrows():
-                if pd.notna(row['epsActual']):
-                    past_map[(idx.year, (idx.month-1)//3+1)] = float(row['epsActual'])
-        
-        est = stock.earnings_estimate
-        if est is not None:
-            est.index = est.index.astype(str).str.strip()
+        # 🛡️ 1단계: 재무제표 원본(quarterly_income_stmt)에서 과거 EPS 직접 추출 (가장 강력한 우회로)
+        try:
+            q_stmt = stock.quarterly_income_stmt
+            if q_stmt is not None and not q_stmt.empty:
+                for eps_name in ['Diluted EPS', 'Basic EPS', 'EPS']:
+                    if eps_name in q_stmt.index:
+                        eps_row = q_stmt.loc[eps_name].dropna()
+                        for date_col, val in eps_row.items():
+                            year = date_col.year
+                            quarter = (date_col.month - 1) // 3 + 1
+                            past_map[(year, quarter)] = float(val)
+                        break
+        except Exception as e:
+            print(f"재무제표 원본 추출 실패: {e}")
+
+        # 🛡️ 2단계: 기존 earnings_history 백업 (야후가 기분 좋아서 열어줄 때를 대비)
+        if not past_map:
+            try:
+                hist = stock.earnings_history
+                if hist is not None and not hist.empty:
+                    for idx, row in hist.iterrows():
+                        if pd.notna(row.get('epsActual')):
+                            past_map[(idx.year, (idx.month-1)//3+1)] = float(row['epsActual'])
+            except: pass
+
+        # 🛡️ 3단계: 미래 추정치 추출 (earnings_estimate)
+        try:
+            est = stock.earnings_estimate
+            if est is not None and not est.empty:
+                est.index = est.index.astype(str).str.strip()
+                curr_y = datetime.date.today().year
+                for term, offset in [('0y',0), ('+1y',1), ('+5y',5)]:
+                    if term in est.index:
+                        val = est.loc[term, 'avg']
+                        if pd.notna(val): est_annual[curr_y+offset] = float(val)
+                
+                if '0q' in est.index:
+                    val = est.loc['0q', 'avg']
+                    if pd.notna(val): est_quarter[(curr_y, (datetime.date.today().month-1)//3+1)] = float(val)
+                if '+1q' in est.index:
+                    val = est.loc['+1q', 'avg']
+                    if pd.notna(val):
+                        nm = datetime.date.today().month + 3
+                        ny = curr_y + (1 if nm > 12 else 0)
+                        nq = ((nm-1)//3+1) if nm <= 12 else 1
+                        est_quarter[(ny, nq)] = float(val)
+        except: pass
+
+        # 🛡️ 4단계: 비상 대책 (앱 중단 방지)
+        # 야후가 미래 추정치를 안 줄 때, 과거 4분기 데이터를 복사해 가상의 TTM(Trailing Twelve Months) 유지
+        if not est_annual and past_map:
             curr_y = datetime.date.today().year
-            for term, offset in [('0y',0), ('+1y',1), ('+5y',5)]:
-                if term in est.index:
-                    val = est.loc[term, 'avg']
-                    if pd.notna(val): est_annual[curr_y+offset] = float(val)
-            
-            if '0q' in est.index:
-                val = est.loc['0q', 'avg']
-                if pd.notna(val): est_quarter[(curr_y, (datetime.date.today().month-1)//3+1)] = float(val)
-            if '+1q' in est.index:
-                val = est.loc['+1q', 'avg']
-                if pd.notna(val):
-                    nm = datetime.date.today().month + 3
-                    ny = curr_y + (1 if nm > 12 else 0)
-                    nq = ((nm-1)//3+1) if nm <= 12 else 1
-                    est_quarter[(ny, nq)] = float(val)
+            recent_eps_list = list(past_map.values())[:4]
+            if recent_eps_list:
+                ttm_eps = sum(recent_eps_list)
+                est_annual[curr_y] = ttm_eps
+                est_annual[curr_y+1] = ttm_eps
 
         return past_map, est_annual, est_quarter
     except Exception as e:
-        print(f"🚨 Yahoo Rate Limit/에러: {e}")
+        print(f"🚨 Yahoo Data Fetch Error: {e}")
         return {}, {}, {}
 
 @st.cache_data(ttl=3600)
