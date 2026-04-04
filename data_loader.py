@@ -21,11 +21,11 @@ def get_macro_data():
     try:
         # 10년물-2년물 장단기 금리차
         url_y = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=T10Y2Y"
-        y = pd.read_csv(url_y, parse_dates=['DATE'], index_col='DATE', na_values='.').dropna()
+        y = pd.read_csv(url_y, parse_dates=['observation_date'], index_col='observation_date', na_values='.').dropna()
         
         # 하이일드 스프레드
         url_h = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=BAMLH0A0HYM2"
-        h = pd.read_csv(url_h, parse_dates=['DATE'], index_col='DATE', na_values='.').dropna()
+        h = pd.read_csv(url_h, parse_dates=['observation_date'], index_col='observation_date', na_values='.').dropna()
         
         # 1000일치 데이터로 자르기
         y = y[y.index >= pd.to_datetime(start_date)]
