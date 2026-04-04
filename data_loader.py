@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import pandas_datareader.data as web
+
 import yfinance as yf
 import requests
 import re
@@ -17,11 +17,21 @@ from logic import build_priority_map_kr, build_priority_map_us, calculate_12m_fw
 def get_macro_data():
     start_date = datetime.datetime.now() - datetime.timedelta(days=1000)
     
-    # 1) FRED 데이터 (금리)
+    # 1) FRED 데이터 (금리) - 직접 CSV 다운로드 방식
     try:
-        y = web.DataReader('T10Y2Y', 'fred', start_date).dropna()
-        h = web.DataReader('BAMLH0A0HYM2', 'fred', start_date).dropna()
-    except: 
+        # 10년물-2년물 장단기 금리차
+        url_y = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=T10Y2Y"
+        y = pd.read_csv(url_y, parse_dates=['DATE'], index_col='DATE', na_values='.').dropna()
+        
+        # 하이일드 스프레드
+        url_h = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=BAMLH0A0HYM2"
+        h = pd.read_csv(url_h, parse_dates=['DATE'], index_col='DATE', na_values='.').dropna()
+        
+        # 1000일치 데이터로 자르기
+        y = y[y.index >= pd.to_datetime(start_date)]
+        h = h[h.index >= pd.to_datetime(start_date)]
+    except Exception as e: 
+        print(f"FRED 로딩 실패: {e}")
         y, h = pd.DataFrame(), pd.DataFrame()
     
     # 2) OECD CLI 데이터 (미국 & 한국)
