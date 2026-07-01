@@ -21,7 +21,7 @@ with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2910/2910312.png", width=50)
     st.header("Global EPS Trader")
     st.info("AI 기반 퀀트 분석 포트폴리오")
-    user_input = st.text_input("종목명 또는 티커", "삼성전자")
+    user_input = st.text_input("종목명 또는 티커", "엔비디아")
     run = st.button("🚀 분석 실행", type="primary")
     st.markdown("---")
     with st.expander("📊 로직 가이드"):
